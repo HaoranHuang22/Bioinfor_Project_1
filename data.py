@@ -147,20 +147,11 @@ def get_pdb_data(pdb_chains, data_dir="./pdb"):
 
     return CA_coords, res_label, chi_angles
     
-        
-                
-                    
-
-
-        
-
-
-
-
+    
 if __name__ == "__main__":
     train_pdbs, train_pdb_chains = read_domain_ids_per_chain_from_txt("./data/train_domains.txt")
     test_pdbs, test_pdb_chains = read_domain_ids_per_chain_from_txt("./data/test_domains.txt")
-    #for pdb in train_pdbs:
-        #download_pdb(pdb)
-    #for pdb in test_pdbs:
-        #download_pdb(pdb)
+    for pdb in train_pdbs:
+        download_pdb(pdb)
+    for pdb in test_pdbs:
+        download_pdb(pdb)
