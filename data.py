@@ -2,6 +2,7 @@ from Bio.PDB import *
 import os
 import numpy as np
 import common.res_infor
+from Bio.PDB.DSSP import dssp_dict_from_pdb_file
 
 def read_domain_ids_per_chain_from_txt(txt_file):
     """
@@ -51,7 +52,7 @@ def get_pdb_chains(pdb_chains,  data_dir="./pdb"):
         pdb_chains(tuple): pdb id and chain character
         data_dir(str): path to pdb directory
 
-    returns:
+    Returns:
         (pdb id, chain)
     """
     pdb = pdb_chains[0]
@@ -147,11 +148,50 @@ def get_pdb_data(pdb_chains, data_dir="./pdb"):
 
     return CA_coords, res_label, chi_angles
     
+def get_secondary_structure(pdb_chains, data_dir = "./pdb"):
+    """
+    Function to get secondary structure topology of proteins
+
+    Args:
+        pdb_chains(tuple): pdb id and chain character
+        data_dir(str): path to pdb directory
+
+    Returns:
+        secondary_structure_block(list): a list of 'H'(helix), 'E'(sheet), or 'L'(loop)
+        amino_acid(list): a list of amino acid
+    """
+    pdb = pdb_chains[0]
+    chain = pdb_chains[1]
+    parser = PDBParser(QUIET=True)
+    ss_list = []
+    aa_list = []
+
+    f = data_dir + "/" + "pdb" + pdb + ".ent"
+    if os.path.isfile(f):
+        structure = parser.get_structure(pdb, f)
+    else:
+        f = data_dir + "/" + pdb + ".pdb"
+        structure = parser.get_structure(pdb, f)
     
-if __name__ == "__main__":
-    train_pdbs, train_pdb_chains = read_domain_ids_per_chain_from_txt("./data/train_domains.txt")
-    test_pdbs, test_pdb_chains = read_domain_ids_per_chain_from_txt("./data/test_domains.txt")
-    for pdb in train_pdbs:
-        download_pdb(pdb)
-    for pdb in test_pdbs:
-        download_pdb(pdb)
+    
+    model = structure[0]
+    dssp = DSSP(model, f)
+    a_key = list(dssp.keys())
+    for key in a_key:
+        if key[0] == chain:
+            aa = dssp[key][1]
+            ss = dssp[key][2]
+            # (dssp index, amino acid, secondary structure, relative ASA, phi, psi,
+            # NH_O_1_relidx, NH_O_1_energy, O_NH_1_relidx, O_NH_1_energy,
+            # NH_O_2_relidx, NH_O_2_energy, O_NH_2_relidx, O_NH_2_energy)
+            if ss == "E" or ss == "B": # strand (E, B)
+                ss = "E"
+            elif ss == "H" or ss == "G" or ss == "I": # helix (G, H, I)
+                ss = "H"
+            else:
+                ss = "L"
+            ss_list.append(ss)
+            aa_list.append(aa)
+    
+    return aa_list, ss_list
+    
