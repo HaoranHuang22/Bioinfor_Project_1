@@ -16,6 +16,6 @@ The dataset consists of three parts (pdb id with chain character, centered C alp
 ### Parameters
 The following parameters were used in the coordinate diffusion model:
 - Learning rate: {0.001}
-- Batch size: {128}
+- Batch size: {32}
 - Epochs: {100}
-- 
+- Time embedding dimension: {128}
