@@ -1,7 +1,8 @@
 # Bioinfor_Project_1
 
 ## Dataload
-The dataset consists of three parts (pdb id with chain character, centered C alpha coordinates that are scaled down 15X, residue type)
+The dataset consists of three parts (pdb id with chain character, centered C alpha coordinates that are scaled down 15X, residue type).
+Subsample 20 aa for each protein
 
 ## Model Architecture
 ### Diffusion Model
@@ -19,3 +20,4 @@ The following parameters were used in the coordinate diffusion model:
 - Batch size: {32}
 - Epochs: {100}
 - Time embedding dimension: {128}
+- Time steps: {100}
