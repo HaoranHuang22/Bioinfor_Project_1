@@ -77,7 +77,7 @@ def get_pdb_chains(pdb_chains,  data_dir="../data/pdb"):
 
 def get_pdb_data(pdb_chains, data_dir="../data/pdb", subsample=20):
     """
-    Function to get four kinds of data from pdb structures
+    Function to get C alpha coordinate from pdb structures
 
     Args:
         pdb_chains(tuple): pdb id and chain character
@@ -114,6 +114,68 @@ def get_pdb_data(pdb_chains, data_dir="../data/pdb", subsample=20):
 
     return CA_coords, res_label
 
+def get_Backbone_atom_coords(pdb_chains, data_dir="../data/pdb"):
+    """
+    Function to get N, C alpha, C coordinate for each residue
+
+    Args:
+        pdb_chains(tuple): pdb id and chain character
+        data_dir(str): path to pdb directory
+
+    Returns:
+        atom_coords (np.array): num_res atoms x 3 atoms x 3 coordinates of all retained C alpha atoms in structure
+        res_label (np.array): num_res x 1 residue type labels (amino acid type) for all residues
+    """
+    #get pdb chain data
+    chain = get_pdb_chains(pdb_chains)[1]
+    atom_coords = []
+    res_label = []
+
+    for res in chain.get_residues():
+        res_name = res.get_resname()
+
+        # if residue is an amino acid, add its label, get the C alpha coordinates 
+        if res_name in common.res_infor.res_label_dict.keys():
+            # get residue type
+            res_type = common.res_infor.res_label_dict[res_name]
+            res_label.append(res_type)
+            try:
+                n = res['N'].get_coord().tolist()
+                ca = res['CA'].get_coord().tolist()
+                c = res['C'].get_coord().tolist()
+                atom_coords.append([n,ca,c])
+            except KeyError:
+                pass
+
+    atom_coords = np.array(atom_coords)
+    res_label = np.array(res_label).reshape(len(res_label), 1)
+
+    return atom_coords, res_label
+
+def load_backbone_coords(pdb_chains):
+    """
+    Function to get 
+
+    Args:
+        pdb_chains(list): a list of pdb id and chain character
+
+    Returns:
+        data(np.array): num_sample x num_res X 3 atoms x 3 coordinates of all retained C alpha atoms in structure
+    """
+    data_coords = []
+    data_res = []
+    n = len(pdb_chains)
+    count = 0
+    for pdb_chain in pdb_chains:
+        atom_coords, res_label = get_Backbone_atom_coords(pdb_chain)
+        data_coords.append(atom_coords)
+        data_res.append(res_label)
+        count += 1
+        print(str(count) + "/" + str(n))
+
+    data_coords = np.array(data_coords)
+    data_res = np.array(data_res)
+    return data_coords, data_res
 
 def get_chi_angles(pdb_chains, data_dir="../data/pdb", subsample=20):
     """
