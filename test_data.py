@@ -1,20 +1,13 @@
 from utils.data import *
 
-def test_secondary_structure_length():
-    test_pdb_pair = ('1bur','S')
-    amino_acid, secondary_structure = get_secondary_structure(test_pdb_pair, data_dir="/mnt/d/Project/data/pdb")
-    assert len(amino_acid) == len(secondary_structure)
 
-def test_resiude_length():
-    test_pdb_pair = ('1bur','S')
-    amino_acid, _ = get_secondary_structure(test_pdb_pair, data_dir="/mnt/d/Project/data/pdb")
-    _, res_label, _ = get_pdb_data(test_pdb_pair)
-    assert len(res_label) == len(amino_acid)
+def test_get_Backbone_atom_coords():
+    pdb_chain = ("5ea0", "H")
+    atom_coords, res_label = get_Backbone_atom_coords(pdb_chain)
+    assert res_label.shape == (len(res_label),1)
+    assert atom_coords.shape == (len(res_label), 3, 3)
 
-def test_secondary_structure_code():
-    test_pdb_pair = ('1bur','S')
-    _, secondary_structure = get_secondary_structure(test_pdb_pair, data_dir="/mnt/d/Project/data/pdb")
-    for ss in secondary_structure:
-        assert ss == "H" or ss == "E" or ss == "L"
+
+
 
 
