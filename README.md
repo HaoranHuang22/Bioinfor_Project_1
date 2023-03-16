@@ -17,7 +17,7 @@ Subsample 20 aa for each protein
 ### Parameters
 The following parameters were used in the coordinate diffusion model:
 - Learning rate: {0.001}
-- Batch size: {32}
+- Batch size: {128}
 - Epochs: {100}
 - Time embedding dimension: {128}
 - Time steps: {100}
