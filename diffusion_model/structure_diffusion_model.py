@@ -5,6 +5,10 @@ import torch.nn.functional as F
 from common.res_infor import label_res_dict
 
 import esm
+import roma
+from pytorch3d.transforms import quaternion_multiply, quaternion_to_matrix
+from invariant_point_attention import IPABlock
+
 # Constraint Part
 
 def get_single_representation(pdb_chain, res_label):
@@ -67,6 +71,30 @@ def get_secondary_representation(atom_coords: torch.Tensor):
 
 # Diffusion Part
 
+def rigidFrom3Points(x1, x2, x3):
+    """
+    Construct of frames from groud truth atom positions
+    From alphaFold2 supplementary Algorithm {21} Rigid from 3 points using the Gram–Schmidt process
+    Args:
+        x1(torch.Tensor): N atom coordinates. dim -> (batch_size, num_res, 3)
+        x2(torch.Tensor): C alpha atom coordinates. -> (batch_size, num_res, 3)
+        x3(torch.Tensor): C atom coordinates. -> (batch_size, num_res, 3)
+    
+    Return:
+        Rotations(tensor.Tensor): Rotation matrix. dim -> (batch_size, num_res, 3, 3)
+        translations(tensor.Tensor): translation vector. dim -> (batch_size, num_res, 3)
+    """
+    v1 = x3 - x2
+    v2 = x1 - x2
+    e1 = v1 / torch.linalg.norm(v1)
+    u2 = v2 - torch.dot(v2, e1) / torch.dot(e1, e1) * e1
+    e2 = u2 / torch.linalg.norm(u2)
+    e3 = torch.cross(e1, e2)
+    R = torch.stack([e1, e2, e3], dim=1) # column vector matrix
+    t = x1
+
+    return R, t
+
 def linear_beta_schedule(timesteps):
     """
     linear schedule, proposed in original paper
@@ -88,9 +116,9 @@ def cosine_beta_schedule(timesteps, s = 0.008):
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
     return torch.clip(betas, 0, 0.999)
 
-class Diffusion(nn.Module):
+class ProteinDiffusion(nn.Module):
     def __init__(self, timesteps=1000, beta_schedule = 'cosine', device = None):
-        super(Diffusion, self).__init__()
+        super(ProteinDiffusion, self).__init__()
         self.device = device
         self.timesteps = timesteps
         
@@ -108,9 +136,12 @@ class Diffusion(nn.Module):
     def sample_timesteps(self, batch_size: int):
         return torch.randint(low=1, high=self.timesteps, size=(batch_size, ))
     
-    def q_sample(self, x: torch.Tensor, t: torch.Tensor):
+    def coord_q_sample(self, x: torch.Tensor, t: torch.Tensor):
         alpha_bars_t = self.alpha_bars[t].view(-1, 1, 1, 1)
         epsilon = torch.rand_like(x, device=self.device)
         
         noisy = torch.sqrt(alpha_bars_t) * x + torch.sqrt(1 - alpha_bars_t) * epsilon
         return noisy, epsilon
+    
+    def quaternion_q_sample(self, x:torch.Tensor, t: torch.Tensor):
+        alpha_t = self.alphas[t]
