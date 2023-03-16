@@ -30,6 +30,29 @@ class CAcoordsDataLoader(DataLoader):
         dataset = CAcoordsDataset(pdb_chains, data_file_ca, data_file_res)
         super().__init__(dataset, batch_size=batch_size, shuffle=shuffle)
     
+class BackboneCoordsDataset(Dataset):
+    def __init__(self, pdb_chains, data_file_coords, data_file_res, seq_length = int):
+        pdb_chains = [str(x[0]) + str(x[1]) for x in pdb_chains]
+        self.id = pdb_chains
+        self.data = np.load(data_file_coords)
+        self.res = np.load(data_file_res)
+
+    def __len__(self):
+        # Return the number of data points
+        return len(self.data)
+    
+    def __getitem__(self, index):
+        pdb_id = self.id[index]
+        atom_coords = self.data[index]
+        scale_down_coords = scale_down(atom_coords, times=15) # backbone atom coordinates
+        residues = self.res[index] # residue
+
+        return pdb_id, residues, scale_down_coords
+    
+class BackboneCoordsDataLoader(DataLoader):
+    def __init__(self, pdb_chains, data_file_coords, data_file_res, seq_length, batch_size=128, shuffle=True):
+        dataset = BackboneCoordsDataset(pdb_chains, data_file_coords, data_file_res, seq_length)
+        super().__init__(dataset, batch_size=batch_size, shuffle=shuffle)
 
 
 

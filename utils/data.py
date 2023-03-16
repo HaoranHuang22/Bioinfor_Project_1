@@ -114,7 +114,7 @@ def get_pdb_data(pdb_chains, data_dir="../data/pdb", subsample=20):
 
     return CA_coords, res_label
 
-def get_Backbone_atom_coords(pdb_chains, data_dir="../data/pdb"):
+def get_Backbone_atom_coords(pdb_chains, data_dir="../data/pdb", seq_length=20):
     """
     Function to get N, C alpha, C coordinate for each residue
 
@@ -147,8 +147,8 @@ def get_Backbone_atom_coords(pdb_chains, data_dir="../data/pdb"):
             except KeyError:
                 pass
 
-    atom_coords = np.array(atom_coords)
-    res_label = np.array(res_label).reshape(len(res_label), 1)
+    atom_coords = np.array(atom_coords)[:seq_length]
+    res_label = np.array(res_label).reshape(len(res_label), 1)[:seq_length]
 
     return atom_coords, res_label
 
