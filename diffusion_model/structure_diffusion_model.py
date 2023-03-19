@@ -1,75 +1,11 @@
 import torch 
+from torch import einsum
 import torch.nn as nn
 import torch.nn.functional as F
 
-from common.res_infor import label_res_dict
-
-import esm
 import roma
 from pytorch3d.transforms import quaternion_multiply, quaternion_to_matrix
 from invariant_point_attention import IPABlock
-
-# Constraint Part
-
-def get_single_representation(pdb_chain, res_label):
-    """
-    Function to get single representation
-
-    Args:
-        pdb_chain(tuple): batch_size
-        res_label(torch.Tensor): dim -> (batch_size, num_res, 1)
-
-    Returns:
-        single_repr(torch.Tensor): dim -> (batch_size, embedding_dim)
-    """
-    #Load ESM-1b model
-    model, alphabet = esm.pretrained.esm1b_t33_650M_UR50S()
-    batch_converter = alphabet.get_batch_converter()
-    model.eval() # disables dropout for deterministic results
-
-    #Prepare data
-    data = []
-    for i in range(len(pdb_chain)):
-        sequence = ""
-        for label in res_label[i]:
-            aa = label_res_dict[label.item()]
-            sequence += aa
-        data.append((pdb_chain[i], sequence))
-
-    batch_labels, batch_strs, batch_tokens = batch_converter(data)
-    batch_lens = (batch_tokens != alphabet.padding_idx).sum(1)
-
-    # Extract per-residue representations (on CPU)
-    with torch.no_grad():
-        results = model(batch_tokens, repr_layers=[33], return_contacts=True)
-    token_representations = results["representations"][33]
-
-    # Generate per-sequence representations via averaging
-    # NOTE: token 0 is always a beginning-of-sequence token, so the first residue is token 1.
-    sequence_representations = []
-    for i, tokens_len in enumerate(batch_lens):
-        sequence_representations.append(token_representations[i, 1 : tokens_len - 1].mean(0))
-    
-    single_repr = torch.stack(sequence_representations, dim=0)
-    return single_repr
-
-def get_secondary_representation(atom_coords: torch.Tensor):
-    """
-    Function to get pair representation, C alpha atom distance map
-
-    Args:
-        atom_coords(torch.Tensor): dim -> (batch_size, num_res, 3, 3)
-
-    Returns:
-        pair_repr(torch.Tensor): dim -> (batch_size, num_res, num_res)
-    """
-    ca_coords = atom_coords[:,:,1]
-
-    # Compute the distance matrix
-    dist_mat = torch.cdist(ca_coords, ca_coords, p=2)
-    return dist_mat
-
-# Diffusion Part
 
 def rigidFrom3Points(x1, x2, x3):
     """
@@ -86,12 +22,12 @@ def rigidFrom3Points(x1, x2, x3):
     """
     v1 = x3 - x2
     v2 = x1 - x2
-    e1 = v1 / torch.linalg.norm(v1)
-    u2 = v2 - torch.dot(v2, e1) / torch.dot(e1, e1) * e1
-    e2 = u2 / torch.linalg.norm(u2)
+    e1 = v1 / torch.linalg.norm(v1, dim=2, keepdim=True)
+    u2 = v2 - torch.einsum('bij,bij->bi', v2, e1).unsqueeze(-1) * e1 / torch.einsum('bij,bij->bi', e1, e1).unsqueeze(-1)
+    e2 = u2 / torch.linalg.norm(u2, dim=2, keepdim=True)
     e3 = torch.cross(e1, e2)
-    R = torch.stack([e1, e2, e3], dim=1) # column vector matrix
-    t = x1
+    R = torch.stack([e1, e2, e3], dim=2) # column vector matrix
+    t = x2
 
     return R, t
 
@@ -130,18 +66,109 @@ class ProteinDiffusion(nn.Module):
             raise ValueError(f'unkown beta schedule {beta_schedule}')
         
         self.betas = beta_schedule_fn(self.timesteps)
-        self.alphas = 1 - self.betas
-        self.alpha_bars = torch.cumprod(self.alphas, dim = 0).to(self.device)
+        self.alphas = 1 - self.betas.to(self.device)
+        self.alpha_bars = torch.cumprod(self.alphas, dim = 0)
 
     def sample_timesteps(self, batch_size: int):
         return torch.randint(low=1, high=self.timesteps, size=(batch_size, ))
     
     def coord_q_sample(self, x: torch.Tensor, t: torch.Tensor):
-        alpha_bars_t = self.alpha_bars[t].view(-1, 1, 1, 1)
+        """
+        Foward diffusion process for C alpha coordinates
+
+        Args:
+            x(torch.Tensor): dim -> (batch_size, num_res, 3)
+            t(torch.Tensor): dim -> (batch_size, )
+
+        Return:
+            noisy(torch.Tensor): dim-> (batch_size, num_res, 3)
+        """
+        alpha_bars_t = self.alpha_bars[t].view(-1, 1, 1) # dim -> (batch_size, 1, 1)
         epsilon = torch.rand_like(x, device=self.device)
         
         noisy = torch.sqrt(alpha_bars_t) * x + torch.sqrt(1 - alpha_bars_t) * epsilon
-        return noisy, epsilon
+        return noisy
     
-    def quaternion_q_sample(self, x:torch.Tensor, t: torch.Tensor):
+    def quaternion_q_sample(self, q_0:torch.Tensor, t: torch.Tensor):
+        """
+        Foward diffusion process for unit quaternions
+
+        Args:
+            q_0(torch.Tensor): dim -> (batch_size, num_res, 4)
+            t(torch.Tensor): dim -> (batch_size, )
+
+        Return:
+            q_t(torch.Tensor): dim -> (batch_size, num_res, 4)
+        """
+        batch_size, num_res = q_0.shape[0], q_0.shape[1]
+
         alpha_t = self.alphas[t]
+        q_T = roma.random_unitquat(size=(batch_size, num_res)) # dim -> (batch_size, num_res, 4)
+        q_interpolated = roma.utils.unitquat_slerp(q_0, q_T, alpha_t) #(t_size, batch_size, 20, 4)
+        # create empty result tensor
+        q_t = torch.empty_like(q_T, device=self.device)
+        # loop over t_size and extract desired batch
+        for t in range(len(alpha_t)):
+            batch = q_interpolated[t, t % batch_size]
+            q_t[t] = batch # dim -> (t_size, num_res, 4)
+        
+        return q_t
+
+class StructureModel(nn.Module):
+    def __init__(self, input_single_repr_dim = 1280, input_pair_repr_dim = 1, dim = 128, 
+                 structure_module_depth = 12, structure_module_heads = 4, point_key_dim = 4, point_value_dim = 4):
+        super().__init__()
+
+        self.single_repr = nn.Linear(input_single_repr_dim, dim)
+        self.pair_repr = nn.Linear(input_pair_repr_dim, dim)
+
+        self.structure_module_depth = structure_module_depth
+        self.ipa_block =IPABlock(dim=dim, heads = structure_module_heads, 
+                                 point_key_dim = point_key_dim, point_value_dim = point_value_dim)
+        
+        self.to_points = nn.Linear(dim, 3)
+        self.to_quaternion_update = nn.Linear(dim, 6)
+        
+
+    def forward(self, single_repr:torch.Tensor, pair_repr:torch.Tensor, quaternions:torch.Tensor, translations:torch.Tensor):
+        """
+        Args:
+            single_repr: dim -> (batch_size, num_res, embedding_dim)
+            pair_repr: dim -> (batch_size, num_res, num_res)
+            quaternions: dim -> (batch_size, num_res, 4)
+            translation: dim -> (batch_size, num_res, 3)
+        
+        Returns:
+            rotations: dim -> (batch_size, num_res, 3, 3)
+            translations: dim -> (batch_size, num_res, 3)
+        """
+        pair_repr = pair_repr.unsequeeze(-1) # dim -> (batch_size, num_res, num_res, 1)
+
+        # Linear Foward
+        single_repr = self.single_repr(single_repr) 
+        pair_repr = self.pair_repr(pair_repr)
+
+        for i in range(self.structure_module_depth):
+            is_last = i == (self.structure_module_depth - 1)
+
+            rotations = quaternion_to_matrix(quaternions)
+
+            if not is_last:
+                rotations = rotations.detach()
+        
+            single_repr = self.ipa_block(single_repr, pairwise_repr = pair_repr, 
+                                         rotations = rotations, translations = translations)
+            
+            # update quaternion and translation
+            quaternion_update, translation_update = self.to_quaternion_update(single_repr).chunk(2, dim = -1) # (batch_size, num_res, 6) -> (batch_size, num_res, 3), (batch_size, num_res, 3)
+            quaternion_update = F.pad(quaternion_update, (1, 0), value = 1.) # dim -> (batch_size, num_res, 4)
+
+            quaternions = quaternion_multiply(quaternions, quaternion_update)
+            translations = translations + einsum('b n c, b n c r -> b n r', translation_update, rotations)
+        
+        points_local = self.to_points(single_repr)
+        rotations = quaternion_to_matrix(quaternions)
+        coords_global = einsum('b n c, b n c d -> b n d', points_local, rotations) + translations
+
+        return coords_global
+
