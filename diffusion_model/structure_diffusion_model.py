@@ -3,6 +3,8 @@ from torch import einsum
 import torch.nn as nn
 import torch.nn.functional as F
 
+import math
+
 import roma
 from pytorch3d.transforms import quaternion_multiply, quaternion_to_matrix
 from invariant_point_attention import IPABlock
