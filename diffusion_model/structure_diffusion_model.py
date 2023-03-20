@@ -6,7 +6,6 @@ import torch.nn.functional as F
 import math
 
 import roma
-from pytorch3d.transforms import quaternion_multiply, quaternion_to_matrix
 from invariant_point_attention import IPABlock
 
 def rigidFrom3Points(x1, x2, x3):
@@ -105,8 +104,8 @@ class ProteinDiffusion(nn.Module):
         batch_size, num_res = q_0.shape[0], q_0.shape[1]
 
         alpha_t = self.alphas[t]
-        q_T = roma.random_unitquat(size=(batch_size, num_res)) # dim -> (batch_size, num_res, 4)
-        q_interpolated = roma.utils.unitquat_slerp(q_0, q_T, alpha_t) #(t_size, batch_size, 20, 4)
+        q_T = roma.random_unitquat(size=(batch_size, num_res)).to(self.device) # dim -> (batch_size, num_res, 4)
+        q_interpolated = roma.utils.unitquat_slerp(q_0.double(), q_T.double(), alpha_t) #(t_size, batch_size, 20, 4)
         # create empty result tensor
         q_t = torch.empty_like(q_T, device=self.device)
         # loop over t_size and extract desired batch
@@ -144,20 +143,20 @@ class StructureModel(nn.Module):
             rotations: dim -> (batch_size, num_res, 3, 3)
             translations: dim -> (batch_size, num_res, 3)
         """
-        pair_repr = pair_repr.unsequeeze(-1) # dim -> (batch_size, num_res, num_res, 1)
+        pair_repr = pair_repr.unsqueeze(-1) # dim -> (batch_size, num_res, num_res, 1)
 
         # Linear Foward
-        single_repr = self.single_repr(single_repr) 
+        single_repr = self.single_repr(single_repr)
         pair_repr = self.pair_repr(pair_repr)
 
         for i in range(self.structure_module_depth):
             is_last = i == (self.structure_module_depth - 1)
 
-            rotations = quaternion_to_matrix(quaternions)
+            rotations = roma.unitquat_to_rotmat(quaternions)
 
             if not is_last:
                 rotations = rotations.detach()
-        
+    
             single_repr = self.ipa_block(single_repr, pairwise_repr = pair_repr, 
                                          rotations = rotations, translations = translations)
             
@@ -165,11 +164,11 @@ class StructureModel(nn.Module):
             quaternion_update, translation_update = self.to_quaternion_update(single_repr).chunk(2, dim = -1) # (batch_size, num_res, 6) -> (batch_size, num_res, 3), (batch_size, num_res, 3)
             quaternion_update = F.pad(quaternion_update, (1, 0), value = 1.) # dim -> (batch_size, num_res, 4)
 
-            quaternions = quaternion_multiply(quaternions, quaternion_update)
+            quaternions = roma.quat_product(quaternions, quaternion_update)
             translations = translations + einsum('b n c, b n c r -> b n r', translation_update, rotations)
         
         points_local = self.to_points(single_repr)
-        rotations = quaternion_to_matrix(quaternions)
+        rotations = roma.unitquat_to_rotmat(quaternions)
         coords_global = einsum('b n c, b n c d -> b n d', points_local, rotations) + translations
 
         return coords_global
