@@ -12,6 +12,8 @@ Subsample 20 amino acid for each protein
 ### Embedding Model(without constraints)
 - Using ESM-1b pretrained model to get embedding vector for 20 types of amino acids, ESM-1b model returns a 1280 dim vector for each amino acid.
 ```python
+from diffusion_model.embedd import get_single_representation
+
 num_res = 20
 embedding_dim = 1280
 pdb_chain = ("12asA", "12e8H", ...) # (batch, )
@@ -20,6 +22,8 @@ single_repr = get_single_representation(pdb_chain, res_label) # (batch, num_res,
 ```
 - pair representation: C alpha distance matrix
 ```python
+import torch
+
 batch = 128
 num_res = 20
 ca_coords = torch.randn(batch, num_res, 3) # (batch, num_res, 3)
