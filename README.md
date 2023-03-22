@@ -38,6 +38,31 @@ pair_repr = pair_repr.unsqueeze(-1) # (batch, num_res, num_res, 1)
 - Foward diffusion process for quaternions
 
 - IPABlock: Prediction model for rotaion matrix and translations from Alphafold2
+```python
+import torch
+from diffusion_model.structure_diffusion_model import *
+
+batch = 128
+num_res = 20
+
+diffusion = ProteinDiffusion(timesteps=1000, beta_schedule = 'cosine')
+model = StructureModel(
+                    input_single_repr_dim = 1280, 
+                    input_pair_repr_dim = 1, 
+                    dim = 128, 
+                    structure_module_depth = 12, 
+                    structure_module_heads = 4, 
+                    point_key_dim = 4, 
+                    point_value_dim = 4)
+
+single_repr = torch.randn(batch, num_res, 1280) # (batch, num_res, embedding_dim)
+pair_repr = torch.randn(batch, num_res, num_res, 1) # (batch, num_res, num_res, 1)
+t = diffusion.sample_timesteps(batch_size = batch_size) #(batch, )
+x_t = diffusion.coord_q_sample(ca_coords, t) # (batch, num_res, 3)
+q_t = diffusion.quaternion_q_sample(q_0, t) # (batch, num_res, 4)
+
+pred_coords = model(single_repr, pair_repr, q_t, x_t)
+```
 
 ### Parameters
 The following parameters were used in the structure diffusion model:
