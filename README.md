@@ -8,7 +8,7 @@ Subsample 20 amino acid for each protein
 - N, C alpha, C atom coordinates
 
 
-## Model Architecture
+## Model Architecture(demo)
 ### Embedding Model(without constraints)
 - Using ESM-1b pretrained model to get embedding vector for 20 types of amino acids, ESM-1b model returns a 1280 dim vector for each amino acid.
 ```python
@@ -40,6 +40,7 @@ pair_repr = pair_repr.unsqueeze(-1) # (batch, num_res, num_res, 1)
 - IPABlock: Prediction model for rotaion matrix and translations from Alphafold2
 ```python
 import torch
+import roma
 from diffusion_model.structure_diffusion_model import *
 
 batch = 128
@@ -57,10 +58,16 @@ model = StructureModel(
 
 single_repr = torch.randn(batch, num_res, 1280) # (batch, num_res, embedding_dim)
 pair_repr = torch.randn(batch, num_res, num_res, 1) # (batch, num_res, num_res, 1)
+
+ca_coords = torch.randn(batch, num_res, 3) # (batch, num_res, 3)
+q_0 = roma.rotmat_to_unitquat(R) # (batch, num_res, 4)
+
+#foward diffusion
 t = diffusion.sample_timesteps(batch_size = batch_size) #(batch, )
 x_t = diffusion.coord_q_sample(ca_coords, t) # (batch, num_res, 3)
 q_t = diffusion.quaternion_q_sample(q_0, t) # (batch, num_res, 4)
 
+#model
 pred_coords = model(single_repr, pair_repr, q_t, x_t)
 ```
 
