@@ -152,7 +152,7 @@ class StructureModel(nn.Module):
         for i in range(self.structure_module_depth):
             is_last = i == (self.structure_module_depth - 1)
 
-            rotations = roma.unitquat_to_rotmat(quaternions)
+            rotations = roma.unitquat_to_rotmat(quaternions) 
 
             if not is_last:
                 rotations = rotations.detach()
@@ -162,7 +162,7 @@ class StructureModel(nn.Module):
             
             # update quaternion and translation
             quaternion_update, translation_update = self.to_quaternion_update(single_repr).chunk(2, dim = -1) # (batch_size, num_res, 6) -> (batch_size, num_res, 3), (batch_size, num_res, 3)
-            quaternion_update = F.pad(quaternion_update, (1, 0), value = 1.) # dim -> (batch_size, num_res, 4)
+            quaternion_update = F.pad(quaternion_update, (0, 1), value = 1.) # dim -> (batch_size, num_res, 4), roma expects quatations to be in (x, y, z, w) format
 
             quaternions = roma.quat_product(quaternions, quaternion_update)
             translations = translations + einsum('b n c, b n c r -> b n r', translation_update, rotations)
