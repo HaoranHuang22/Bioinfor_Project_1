@@ -19,7 +19,8 @@ res_label_dict = {
     "PRO": 17,
     "GLY": 18,
     "CYS": 19,
-} #"MSE": 20
+    "MSE": 20
+}
 
 label_res_dict = {
     0: "H",
@@ -42,7 +43,8 @@ label_res_dict = {
     17: "P",
     18: "G",
     19: "C",
-} #20: "M"
+    20: "M"
+}
 
 chi_dict = {
     "ARG": {"chi_1": "CG", "chi_2": "CD", "chi_3": "NE", "chi_4": "CZ"},
