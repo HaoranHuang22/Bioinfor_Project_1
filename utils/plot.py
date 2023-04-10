@@ -101,6 +101,9 @@ def show_diffusion_image(ax, ca_coords, t):
 
     if type(ca_coords) is torch.Tensor:
         ca_coords = ca_coords.detach().cpu().numpy()
+    
+    if type(t) is torch.Tensor:
+        t = t.detach().cpu().numpy()
 
     x_coords = ca_coords[:,0]
     y_coords = ca_coords[:,1]
@@ -129,7 +132,7 @@ def show_foward_diffusion(ddpm, pdb_chain, ca_coords, T):
     for i, ax in enumerate(axs):
         if i < n_images:
             t = torch.tensor(int(T / n_images * i))
-            noisy,_ = ddpm.q_sample(ca_coords, t)
+            noisy = ddpm.coord_q_sample(ca_coords, t)
             noisy = noisy.squeeze().squeeze() # dim: 20, 3
             show_diffusion_image(ax, noisy, t)
         else:
