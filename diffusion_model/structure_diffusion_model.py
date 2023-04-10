@@ -67,11 +67,11 @@ class ProteinDiffusion(nn.Module):
             raise ValueError(f'unkown beta schedule {beta_schedule}')
         
         self.betas = beta_schedule_fn(self.timesteps)
-        self.alphas = 1 - self.betas.to(self.device)
+        self.alphas = 1 - self.betas
         self.alpha_bars = torch.cumprod(self.alphas, dim = 0)
 
     def sample_timesteps(self, batch_size: int):
-        return torch.randint(low=1, high=self.timesteps+1, size=(batch_size, ))
+        return torch.randint(low=1, high=self.timesteps, size=(batch_size, ))
     
     def coord_q_sample(self, x: torch.Tensor, t: torch.Tensor):
         """
@@ -85,7 +85,7 @@ class ProteinDiffusion(nn.Module):
             noisy(torch.Tensor): dim-> (batch_size, num_res, 3)
         """
         alpha_bars_t = self.alpha_bars[t].view(-1, 1, 1) # dim -> (batch_size, 1, 1)
-        epsilon = torch.rand_like(x, device=self.device)
+        epsilon = torch.rand_like(x)
         
         noisy = torch.sqrt(alpha_bars_t) * x + torch.sqrt(1 - alpha_bars_t) * epsilon
         return noisy
@@ -104,10 +104,10 @@ class ProteinDiffusion(nn.Module):
         batch_size, num_res = q_0.shape[0], q_0.shape[1]
 
         alpha_t = self.alphas[t]
-        q_T = roma.random_unitquat(size=(batch_size, num_res)).to(self.device) # dim -> (batch_size, num_res, 4)
+        q_T = roma.random_unitquat(size=(batch_size, num_res)) # dim -> (batch_size, num_res, 4)
         q_interpolated = roma.utils.unitquat_slerp(q_0.double(), q_T.double(), alpha_t) #(t_size, batch_size, 20, 4)
         # create empty result tensor
-        q_t = torch.empty_like(q_T, device=self.device)
+        q_t = torch.empty_like(q_T)
         # loop over t_size and extract desired batch
         for t in range(len(alpha_t)):
             batch = q_interpolated[t, t % batch_size]
