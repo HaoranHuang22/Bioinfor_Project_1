@@ -71,7 +71,7 @@ class ProteinDiffusion(nn.Module):
         self.alpha_bars = torch.cumprod(self.alphas, dim = 0)
 
     def sample_timesteps(self, batch_size: int):
-        return torch.randint(low=1, high=self.timesteps, size=(batch_size, ))
+        return torch.randint(low=1, high=self.timesteps+1, size=(batch_size, ))
     
     def coord_q_sample(self, x: torch.Tensor, t: torch.Tensor):
         """
