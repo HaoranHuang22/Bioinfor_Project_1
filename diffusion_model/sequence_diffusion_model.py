@@ -54,8 +54,11 @@ class SequenceDiffusion(nn.Module):
         self.res_num = res_num
         self.timesteps = timesteps
 
-    def sample_timesteps(self, batch_size: int):
-        return torch.randint(low=1, high=self.timesteps + 1, size=(batch_size, ))
+    def sample_timesteps(self, batch_size: int, device):
+        t = torch.randint(low=1, high=self.timesteps, size=(batch_size, ), device=device)
+
+        pt = torch.ones_like(t).float() / self.timesteps
+        return t, pt
     
     def seq_q_sample(self, x_0: torch.Tensor, t: torch.Tensor):
         """
@@ -71,13 +74,58 @@ class SequenceDiffusion(nn.Module):
         x_0_ignore = x_0.clone()
 
         mask_prob = t / self.timesteps
-        mask_prob = mask_prob.repeat(self.res_num, 1).T # reshape to (batch_size, num_res)
+        mask_prob = mask_prob.repeat(self.res_num, 1).T # expand to (batch_size, num_res)
 
         mask = torch.bernoulli(mask_prob).bool() # create mask matrix with probability mask_prob
         x_t = x_0.masked_fill(mask, 21) # mask x with mask matrix, and fill masked position with 21
+
         x_0_ignore[torch.bitwise_not(mask)] = -1 # ignore the position that is not masked
+
+        return x_t, x_0_ignore, mask
+
+class SequenceModel(nn.Module):
+    def __init__(self, input_single_repr_dim = 1,  input_pair_repr_dim = 1, dim = 64, 
+                structure_module_depth = 12, structure_module_heads = 4, point_key_dim = 4, point_value_dim = 4):
+        super().__init__()
+
+        self.single_repr = nn.Linear(input_single_repr_dim, dim)
+        self.pair_repr = nn.Linear(input_pair_repr_dim, dim)
+
+        self.structure_module_depth = structure_module_depth
+        self.ipa_block =IPABlock(dim=dim, heads = structure_module_heads, 
+                                    point_key_dim = point_key_dim, point_value_dim = point_value_dim)
         
-        return x_t, x_0_ignore
+        self.to_points = nn.Linear(dim, 21)
     
+    def forward(self, single_repr:torch.Tensor, pair_repr:torch.Tensor, rotations:torch.Tensor, translations:torch.Tensor):
+        """
+        Args:
+            single_repr(torch.Tensor): dim -> (batch_size, num_res)
+            pair_repr(torch.Tensor): dim -> (batch_size, num_res, num_res)
+            rotations(torch.Tensor): dim -> (batch_size, num_res, 3, 3)
+            translations(torch.Tensor): dim -> (batch_size, num_res, 3)
+        
+        Return:
+            single_repr(torch.Tensor): dim -> (batch_size, num_res)
+        """
+        single_repr = single_repr.unsqueeze(-1) # dim -> (batch_size, num_res, 1)
+        pair_repr = pair_repr.unsqueeze(-1) # dim -> (batch_size, num_res, num_res, 1)
+        
+        single_repr = self.single_repr(single_repr) # dim -> (batch_size, num_res, dim)
+        pair_repr = self.pair_repr(pair_repr) # dim -> (batch_size, num_res, num_res, dim)
+
+        for i in range(self.structure_module_depth):
+            is_last = i == (self.structure_module_depth - 1)
+
+            if not is_last:
+                rotations = rotations.detach()
+            
+            single_repr = self.ipa_block(single_repr, pairwise_repr = pair_repr,
+                                         rotations = rotations, translations = translations)
+
+        single_repr = self.to_points(single_repr) # dim -> (batch_size, num_res, 21)
+        
+        return single_repr
+            
 
 
