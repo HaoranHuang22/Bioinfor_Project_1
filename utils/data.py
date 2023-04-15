@@ -167,7 +167,7 @@ def load_backbone_coords(pdb_chains):
     n = len(pdb_chains)
     count = 0
     for pdb_chain in pdb_chains:
-        atom_coords, res_label = get_Backbone_atom_coords(pdb_chain)
+        atom_coords, res_label = get_Backbone_atom_coords(pdb_chain, seq_length=20)
         data_coords.append(atom_coords)
         data_res.append(res_label)
         count += 1
