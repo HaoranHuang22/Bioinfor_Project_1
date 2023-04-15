@@ -171,5 +171,5 @@ class StructureModel(nn.Module):
         rotations = roma.unitquat_to_rotmat(quaternions)
         coords_global = einsum('b n c, b n c d -> b n d', points_local, rotations) + translations
 
-        return coords_global
+        return coords_global, quaternions
 
