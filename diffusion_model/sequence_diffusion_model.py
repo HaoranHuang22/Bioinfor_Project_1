@@ -98,7 +98,7 @@ class SequenceModel(nn.Module):
         
         self.to_points = nn.Linear(dim, 20)
     
-    def forward(self, single_repr:torch.Tensor, rotations:torch.Tensor, translations:torch.Tensor):
+    def forward(self, single_repr:torch.Tensor, pair_repr:torch.Tensor, rotations:torch.Tensor, translations:torch.Tensor):
         """
         Args:
             single_repr(torch.Tensor): dim -> (batch_size, num_res)
@@ -110,10 +110,10 @@ class SequenceModel(nn.Module):
             single_repr(torch.Tensor): dim -> (batch_size, num_res)
         """
         single_repr = single_repr.unsqueeze(-1) # dim -> (batch_size, num_res, 1)
-        
+        pair_repr = pair_repr.unsqueeze(-1) # dim -> (batch_size, num_res, num_res, 1)
         
         single_repr = self.single_repr(single_repr) # dim -> (batch_size, num_res, dim)
-        
+        pair_repr = self.pair_repr(pair_repr) # dim -> (batch_size, num_res, num_res, dim)
 
         for i in range(self.structure_module_depth):
             is_last = i == (self.structure_module_depth - 1)
@@ -121,7 +121,7 @@ class SequenceModel(nn.Module):
             if not is_last:
                 rotations = rotations.detach()
             
-            single_repr = self.ipa_block(single_repr, rotations = rotations, translations = translations)
+            single_repr = self.ipa_block(single_repr, pairwise_repr = pair_repr, rotations = rotations, translations = translations)
 
         single_repr = self.to_points(single_repr) # dim -> (batch_size, num_res, 20)
         
