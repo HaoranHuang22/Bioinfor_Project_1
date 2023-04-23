@@ -85,16 +85,16 @@ class SequenceDiffusion(nn.Module):
 
 
 class SequenceModel(nn.Module):
-    def __init__(self, input_single_repr_dim = 1,  input_pair_repr_dim = 1, dim = 64, 
-                structure_module_depth = 12, structure_module_heads = 4, point_key_dim = 4, point_value_dim = 4):
+    def __init__(self, input_single_repr_dim = 1, dim = 64, structure_module_depth = 12, 
+                 structure_module_heads = 4, point_key_dim = 4, point_value_dim = 4):
         super().__init__()
 
         self.single_repr = nn.Linear(input_single_repr_dim, dim)
-        self.pair_repr = nn.Linear(input_pair_repr_dim, dim)
 
         self.structure_module_depth = structure_module_depth
         self.ipa_block =IPABlock(dim=dim, heads = structure_module_heads, 
-                                    point_key_dim = point_key_dim, point_value_dim = point_value_dim)
+                                    point_key_dim = point_key_dim, point_value_dim = point_value_dim, 
+                                    require_pairwise_repr = False)
         
         self.to_points = nn.Linear(dim, 20)
     
@@ -102,7 +102,6 @@ class SequenceModel(nn.Module):
         """
         Args:
             single_repr(torch.Tensor): dim -> (batch_size, num_res)
-            pair_repr(torch.Tensor): dim -> (batch_size, num_res, num_res)
             rotations(torch.Tensor): dim -> (batch_size, num_res, 3, 3)
             translations(torch.Tensor): dim -> (batch_size, num_res, 3)
         
