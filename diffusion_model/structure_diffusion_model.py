@@ -114,6 +114,28 @@ class ProteinDiffusion(nn.Module):
             q_t[t] = batch # dim -> (t_size, num_res, 4)
         
         return q_t
+    
+    def sample_p(self, model:nn.Module, single_repr: torch.Tensor, pair_repr: torch.Tensor):
+        """
+        sample from predicted x_0 and q_0
+        Args:
+            single_repr(torch.Tensor): dim -> (batch_size, num_res, 1280)
+            pair_repr(torch.Tensor): dim -> (batch_size, num_res, num_res)
+        Return:
+            x_list(list): list of x_t, dim -> (timesteps, batch_size, num_res, 3)
+            q_list(list): list of q_t, dim -> (timesteps, batch_size, num_res, 4)
+        """
+        batch_size, num_res = single_repr.shape[0], single_repr.shape[1]
+
+        x_t = torch.randn(size=(batch_size, num_res, 3), device = self.device).to(torch.float32)
+        q_t = roma.random_unitquat(size=(batch_size, num_res), device = self.device).to(torch.float32)
+        
+        sample_steps = list(range(1, self.timesteps + 1))
+        
+        x_hat = model(single_repr, pair_repr, q_t, x_t) 
+
+        return x_hat
+            
 
 class StructureModel(nn.Module):
     def __init__(self, input_single_repr_dim = 1280, input_pair_repr_dim = 1, dim = 128, 
@@ -171,5 +193,5 @@ class StructureModel(nn.Module):
         rotations = roma.unitquat_to_rotmat(quaternions)
         coords_global = einsum('b n c, b n c d -> b n d', points_local, rotations) + translations
 
-        return coords_global, quaternions
+        return coords_global
 
