@@ -49,6 +49,8 @@ def plt_Calpha(ax, pdb_chain_id, ca_coords):
     Returns:
         A plot of C alpha atoms for given protein
     """
+    if type(ca_coords) is torch.Tensor:
+        ca_coords = ca_coords.detach().cpu().numpy()
 
     x_coords = ca_coords[:,0]
     y_coords = ca_coords[:,1]
@@ -119,7 +121,7 @@ def show_foward_diffusion(ddpm, pdb_chain, ca_coords, T):
     pdb = pdb_chain[:4]
     chain = pdb_chain[4]
     print("PDB id:" + pdb + " " + chain)
-    n_images = 10
+    n_images = 11
     n_rows = int(np.ceil(np.sqrt(n_images)))
     n_cols = int(np.ceil(n_images / n_rows))
 
@@ -131,7 +133,9 @@ def show_foward_diffusion(ddpm, pdb_chain, ca_coords, T):
     # Iterate over the subplots and plot the C alpha atoms for each protein
     for i, ax in enumerate(axs):
         if i < n_images:
-            t = torch.tensor(int(T / n_images * i))
+            t = torch.tensor(int(T / (n_images-1) * i))
+            if t == 1000:
+                t = 999
             noisy = ddpm.coord_q_sample(ca_coords, t)
             noisy = noisy.squeeze().squeeze() # dim: 20, 3
             show_diffusion_image(ax, noisy, t)
@@ -139,6 +143,20 @@ def show_foward_diffusion(ddpm, pdb_chain, ca_coords, T):
             ax.axis('off')
     plt.tight_layout()
     plt.show()
+
+def plot_3d_scatter(ax, ca_coords, title):
+    if type(ca_coords) is torch.Tensor:
+        ca_coords = ca_coords.detach().cpu().numpy()
+    
+    x_coords = ca_coords[:,0]
+    y_coords = ca_coords[:,1]
+    z_coords = ca_coords[:,2]
+
+    ax.plot(x_coords, y_coords, z_coords, 'r.', label='C alpha atoms')
+    ax.plot(x_coords, y_coords, z_coords, 'b-', label='backbone')
+    ax.set_title(title)
+
+
 
 
 
