@@ -28,7 +28,7 @@ ca_coords = torch.randn(batch, num_res, 3) # (batch, num_res, 3)
 pair_repr = torch.cdist(ca_coords, ca_coords, p=2) # (batch, num_res, num_res)
 pair_repr = pair_repr.unsqueeze(-1) # (batch, num_res, num_res, 1)
 ```
-### Diffusion Model
+### Structure Diffusion Model
 - Cosine schedule for beta
 
 - Foward diffusion process for C alpha coordinates
@@ -36,6 +36,7 @@ pair_repr = pair_repr.unsqueeze(-1) # (batch, num_res, num_res, 1)
 - Foward diffusion process for quaternions
 
 - IPABlock: Prediction model for rotaion matrix and translations from Alphafold2
+
 ```python
 import torch
 import roma
@@ -68,6 +69,9 @@ q_t = diffusion.quaternion_q_sample(q_0, t) # (batch, num_res, 4)
 #model
 pred_coords = model(single_repr, pair_repr, q_t, x_t)
 ```
+### Sequence Diffusion Model
+
+
 
 ### Parameters
 The following parameters were used in the structure diffusion model:
