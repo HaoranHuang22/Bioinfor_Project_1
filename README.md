@@ -1,12 +1,8 @@
 # Bioinfor_Project_1
-- Replication of the structure diffusion model of [Protein Structure and Sequence Generation with Equivariant Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2205.15019) in Pytorch
+- Replication of the structure and sequence diffusion model of [Protein Structure and Sequence Generation with Equivariant Denoising Diffusion Probabilistic Models](https://arxiv.org/abs/2205.15019) in Pytorch
 
-## Input data
-Subsample 20 amino acid for each protein
-- pdb id and chain character 
-- residue type
-- N, C alpha, C atom coordinates
-
+## Data
+53414 training pdb chains and 4372 test pdb chains
 
 ## Model Architecture(demo)
 ### Embedding Model(without constraints)
@@ -20,7 +16,9 @@ pdb_chain = ("12asA", "12e8H", ...) # (batch, )
 res_label = torch.Tensor([[[1],[2], ...]]) # (batch, num_res, 1)
 single_repr = get_single_representation(pdb_chain, res_label) # (batch, num_res, embedding_dim)
 ```
-- pair representation: C alpha distance matrix
+
+- Pair representation: C alpha distance matrix
+
 ```python
 import torch
 
