@@ -7,6 +7,7 @@ import math
 
 import roma
 from invariant_point_attention import IPABlock
+from loss.FAPE import computeFAPE
 
 def rigidFrom3Points(x1, x2, x3):
     """
@@ -132,9 +133,9 @@ class ProteinDiffusion(nn.Module):
         
         sample_steps = list(range(1, self.timesteps + 1))
         
-        x_hat = model(single_repr, pair_repr, q_t, x_t) 
+        x_hat, q_hat = model(single_repr, pair_repr, q_t, x_t) 
 
-        return x_hat
+        return x_hat, q_hat
             
 
 class StructureModel(nn.Module):
@@ -143,13 +144,15 @@ class StructureModel(nn.Module):
         super().__init__()
 
         self.single_repr = nn.Linear(input_single_repr_dim, dim)
+
+        
         self.pair_repr = nn.Linear(input_pair_repr_dim, dim)
 
         self.structure_module_depth = structure_module_depth
         self.ipa_block =IPABlock(dim=dim, heads = structure_module_heads, 
                                  point_key_dim = point_key_dim, point_value_dim = point_value_dim)
         
-        self.to_points = nn.Linear(dim, 3)
+        self.to_points = nn.Linear(dim, 6)
         self.to_quaternion_update = nn.Linear(dim, 6)
         
 
@@ -164,12 +167,18 @@ class StructureModel(nn.Module):
         Returns:
             rotations: dim -> (batch_size, num_res, 3, 3)
             translations: dim -> (batch_size, num_res, 3)
+            points_local: dim -> (batch_size, num_res, 3)
         """
+
         pair_repr = pair_repr.unsqueeze(-1) # dim -> (batch_size, num_res, num_res, 1)
+        quaternions_gt = quaternions.clone()
+        translations_gt = translations.clone()
 
         # Linear Foward
         single_repr = self.single_repr(single_repr)
         pair_repr = self.pair_repr(pair_repr)
+
+        auxiliary_loss = 0
 
         for i in range(self.structure_module_depth):
             is_last = i == (self.structure_module_depth - 1)
@@ -185,13 +194,18 @@ class StructureModel(nn.Module):
             # update quaternion and translation
             quaternion_update, translation_update = self.to_quaternion_update(single_repr).chunk(2, dim = -1) # (batch_size, num_res, 6) -> (batch_size, num_res, 3), (batch_size, num_res, 3)
             quaternion_update = F.pad(quaternion_update, (0, 1), value = 1.) # dim -> (batch_size, num_res, 4), roma expects quatations to be in (x, y, z, w) format
+            quaternion_update = quaternion_update / torch.linalg.norm(quaternion_update, dim = -1, keepdim = True) # normalize quaternion to unit quaternion
 
             quaternions = roma.quat_product(quaternions, quaternion_update)
             translations = translations + einsum('b n c, b n c r -> b n r', translation_update, rotations)
-        
-        points_local = self.to_points(single_repr)
-        rotations = roma.unitquat_to_rotmat(quaternions)
-        coords_global = einsum('b n c, b n c d -> b n d', points_local, rotations) + translations
 
-        return coords_global, quaternions
+            # auxiliary loss
+            auxiliary_loss += computeFAPE(quaternions, translations, translations, quaternions_gt, translations_gt, translations_gt)
+
+        # convert to points
+        n_points_local, c_points_local = self.to_points(single_repr).chunk(2, dim = -1) # dim -> (batch_size, num_res, 3), (batch_size, num_res, 3)
+        rotations = roma.unitquat_to_rotmat(quaternions) # dim -> (batch_size, num_res, 3, 3)
+        auxiliary_loss = auxiliary_loss / self.structure_module_depth
+
+        return quaternions, translations, n_points_local, c_points_local, auxiliary_loss
 
