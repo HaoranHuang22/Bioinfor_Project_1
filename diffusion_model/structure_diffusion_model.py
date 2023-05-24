@@ -171,14 +171,11 @@ class StructureModel(nn.Module):
         """
 
         pair_repr = pair_repr.unsqueeze(-1) # dim -> (batch_size, num_res, num_res, 1)
-        quaternions_gt = quaternions.clone()
-        translations_gt = translations.clone()
 
         # Linear Foward
         single_repr = self.single_repr(single_repr)
         pair_repr = self.pair_repr(pair_repr)
 
-        auxiliary_loss = 0
 
         for i in range(self.structure_module_depth):
             is_last = i == (self.structure_module_depth - 1)
@@ -199,13 +196,9 @@ class StructureModel(nn.Module):
             quaternions = roma.quat_product(quaternions, quaternion_update)
             translations = translations + einsum('b n c, b n c r -> b n r', translation_update, rotations)
 
-            # auxiliary loss
-            auxiliary_loss += computeFAPE(quaternions, translations, translations, quaternions_gt, translations_gt, translations_gt)
-
         # convert to points
         n_points_local, c_points_local = self.to_points(single_repr).chunk(2, dim = -1) # dim -> (batch_size, num_res, 3), (batch_size, num_res, 3)
         rotations = roma.unitquat_to_rotmat(quaternions) # dim -> (batch_size, num_res, 3, 3)
-        auxiliary_loss = auxiliary_loss / self.structure_module_depth
 
-        return quaternions, translations, n_points_local, c_points_local, auxiliary_loss
+        return quaternions, translations, n_points_local, c_points_local
 
