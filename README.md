@@ -4,6 +4,11 @@
 ## Data
 53414 training pdb chains and 4372 test pdb chains
 
+## Requrie Packages
+```Shell
+$ pip install invariant-point-attention
+$ pip install roma
+```
 ## Model Architecture(demo)
 ### Embedding Model(without constraints)
 - Using ESM-1b pretrained model to get embedding vector for 20 types of amino acids, ESM-1b model returns a 1280 dim vector for each amino acid.
